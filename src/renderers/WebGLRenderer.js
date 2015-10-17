@@ -1105,7 +1105,7 @@ THREE.WebGLRenderer = function ( parameters ) {
 		sprites.length = 0;
 		lensFlares.length = 0;
 
-		projectObject( scene );
+		projectObject( scene, camera );
 
 		opaqueObjects.length = opaqueObjectsLastIndex + 1;
 		transparentObjects.length = transparentObjectsLastIndex + 1;
@@ -1119,7 +1119,7 @@ THREE.WebGLRenderer = function ( parameters ) {
 
 		//
 
-		shadowMap.render( scene );
+		shadowMap.render( scene, camera );
 
 		//
 
@@ -1236,77 +1236,81 @@ THREE.WebGLRenderer = function ( parameters ) {
 
 	}
 
-	function projectObject( object ) {
+	function projectObject( object, camera ) {
 
 		if ( object.visible === false ) return;
 
-		if ( object instanceof THREE.Light ) {
+		if ( object.layers.test( camera.layers ) ) {
 
-			lights.push( object );
+			if ( object instanceof THREE.Light ) {
 
-		} else if ( object instanceof THREE.Sprite ) {
+				lights.push( object );
 
-			sprites.push( object );
+			} else if ( object instanceof THREE.Sprite ) {
 
-		} else if ( object instanceof THREE.LensFlare ) {
+				sprites.push( object );
 
-			lensFlares.push( object );
+			} else if ( object instanceof THREE.LensFlare ) {
 
-		} else if ( object instanceof THREE.ImmediateRenderObject ) {
+				lensFlares.push( object );
 
-			if ( _this.sortObjects === true ) {
+			} else if ( object instanceof THREE.ImmediateRenderObject ) {
 
-				_vector3.setFromMatrixPosition( object.matrixWorld );
-				_vector3.applyProjection( _projScreenMatrix );
+				if ( _this.sortObjects === true ) {
 
-			}
+					_vector3.setFromMatrixPosition( object.matrixWorld );
+					_vector3.applyProjection( _projScreenMatrix );
 
-			pushRenderItem( object, null, object.material, _vector3.z, null );
+				}
 
-		} else if ( object instanceof THREE.Mesh || object instanceof THREE.Line || object instanceof THREE.Points ) {
+				pushRenderItem( object, null, object.material, _vector3.z, null );
 
-			if ( object instanceof THREE.SkinnedMesh ) {
+			} else if ( object instanceof THREE.Mesh || object instanceof THREE.Line || object instanceof THREE.Points ) {
 
-				object.skeleton.update();
+				if ( object instanceof THREE.SkinnedMesh ) {
 
-			}
+					object.skeleton.update();
 
-			if ( object.frustumCulled === false || _frustum.intersectsObject( object ) === true ) {
+				}
 
-				var material = object.material;
+				if ( object.frustumCulled === false || _frustum.intersectsObject( object ) === true ) {
 
-				if ( material.visible === true ) {
+					var material = object.material;
 
-					if ( _this.sortObjects === true ) {
+					if ( material.visible === true ) {
 
-						_vector3.setFromMatrixPosition( object.matrixWorld );
-						_vector3.applyProjection( _projScreenMatrix );
+						if ( _this.sortObjects === true ) {
 
-					}
-
-					var geometry = objects.update( object );
-
-					if ( material instanceof THREE.MeshFaceMaterial ) {
-
-						var groups = geometry.groups;
-						var materials = material.materials;
-
-						for ( var i = 0, l = groups.length; i < l; i ++ ) {
-
-							var group = groups[ i ];
-							var groupMaterial = materials[ group.materialIndex ];
-
-							if ( groupMaterial.visible === true ) {
-
-								pushRenderItem( object, geometry, groupMaterial, _vector3.z, group );
-
-							}
+							_vector3.setFromMatrixPosition( object.matrixWorld );
+							_vector3.applyProjection( _projScreenMatrix );
 
 						}
 
-					} else {
+						var geometry = objects.update( object );
 
-						pushRenderItem( object, geometry, material, _vector3.z, null );
+						if ( material instanceof THREE.MeshFaceMaterial ) {
+
+							var groups = geometry.groups;
+							var materials = material.materials;
+
+							for ( var i = 0, l = groups.length; i < l; i ++ ) {
+
+								var group = groups[ i ];
+								var groupMaterial = materials[ group.materialIndex ];
+
+								if ( groupMaterial.visible === true ) {
+
+									pushRenderItem( object, geometry, groupMaterial, _vector3.z, group );
+
+								}
+
+							}
+
+						} else {
+
+							pushRenderItem( object, geometry, material, _vector3.z, null );
+
+						}
 
 					}
 
@@ -1320,7 +1324,7 @@ THREE.WebGLRenderer = function ( parameters ) {
 
 		for ( var i = 0, l = children.length; i < l; i ++ ) {
 
-			projectObject( children[ i ] );
+			projectObject( children[ i ], camera );
 
 		}
 
@@ -1723,9 +1727,13 @@ THREE.WebGLRenderer = function ( parameters ) {
 
 			}
 
-			if ( object.receiveShadow && ! material._shadowPass ) {
+			if ( shadowMap.enabled ) {
 
-				refreshUniformsShadow( m_uniforms, lights, camera );
+				if ( object.receiveShadow && ! material._shadowPass ) {
+
+					refreshUniformsShadow( m_uniforms, lights, camera );
+
+				}
 
 			}
 
@@ -1988,34 +1996,36 @@ THREE.WebGLRenderer = function ( parameters ) {
 
 				var light = lights[ i ];
 
-				if ( light.castShadow === false ) continue;
+				if ( light.castShadow === true ) {
 
-				if ( light instanceof THREE.PointLight || light instanceof THREE.SpotLight || light instanceof THREE.DirectionalLight ) {
+					if ( light instanceof THREE.PointLight || light instanceof THREE.SpotLight || light instanceof THREE.DirectionalLight ) {
 
-					var shadow = light.shadow;
+						var shadow = light.shadow;
 
-					if ( light instanceof THREE.PointLight ) {
+						if ( light instanceof THREE.PointLight ) {
 
-						// for point lights we set the shadow matrix to be a translation-only matrix
-						// equal to inverse of the light's position
-						_vector3.setFromMatrixPosition( light.matrixWorld ).negate();
-						shadow.matrix.identity().setPosition( _vector3 );
+							// for point lights we set the shadow matrix to be a translation-only matrix
+							// equal to inverse of the light's position
+							_vector3.setFromMatrixPosition( light.matrixWorld ).negate();
+							shadow.matrix.identity().setPosition( _vector3 );
 
-						// for point lights we set the sign of the shadowDarkness uniform to be negative
-						uniforms.shadowDarkness.value[ j ] = - shadow.darkness;
+							// for point lights we set the sign of the shadowDarkness uniform to be negative
+							uniforms.shadowDarkness.value[ j ] = - shadow.darkness;
 
-					} else {
+						} else {
 
-						uniforms.shadowDarkness.value[ j ] = shadow.darkness;
+							uniforms.shadowDarkness.value[ j ] = shadow.darkness;
+
+						}
+
+						uniforms.shadowMatrix.value[ j ] = shadow.matrix;
+						uniforms.shadowMap.value[ j ] = shadow.map;
+						uniforms.shadowMapSize.value[ j ] = shadow.mapSize;
+						uniforms.shadowBias.value[ j ] = shadow.bias;
+
+						j ++;
 
 					}
-
-					uniforms.shadowMatrix.value[ j ] = shadow.matrix;
-					uniforms.shadowMap.value[ j ] = shadow.map;
-					uniforms.shadowMapSize.value[ j ] = shadow.mapSize;
-					uniforms.shadowBias.value[ j ] = shadow.bias;
-
-					j ++;
 
 				}
 
@@ -2666,7 +2676,7 @@ THREE.WebGLRenderer = function ( parameters ) {
 
 			if ( texture.wrapS !== THREE.ClampToEdgeWrapping || texture.wrapT !== THREE.ClampToEdgeWrapping ) {
 
-				console.warn( 'THREE.WebGLRenderer: Texture is not power of two. Texture.wrapS and Texture.wrapT should be set to THREE.ClampToEdgeWrapping. ( ' + texture.sourceFile + ' )' );
+				console.warn( 'THREE.WebGLRenderer: Texture is not power of two. Texture.wrapS and Texture.wrapT should be set to THREE.ClampToEdgeWrapping.', texture );
 
 			}
 
@@ -2675,7 +2685,7 @@ THREE.WebGLRenderer = function ( parameters ) {
 
 			if ( texture.minFilter !== THREE.NearestFilter && texture.minFilter !== THREE.LinearFilter ) {
 
-				console.warn( 'THREE.WebGLRenderer: Texture is not power of two. Texture.minFilter should be set to THREE.NearestFilter or THREE.LinearFilter. ( ' + texture.sourceFile + ' )' );
+				console.warn( 'THREE.WebGLRenderer: Texture is not power of two. Texture.minFilter should be set to THREE.NearestFilter or THREE.LinearFilter.', texture );
 
 			}
 
@@ -2704,8 +2714,6 @@ THREE.WebGLRenderer = function ( parameters ) {
 		if ( textureProperties.__webglInit === undefined ) {
 
 			textureProperties.__webglInit = true;
-
-			texture.__webglInit = true;
 
 			texture.addEventListener( 'dispose', onTextureDispose );
 
@@ -2846,6 +2854,7 @@ THREE.WebGLRenderer = function ( parameters ) {
 			}
 
 			uploadTexture( textureProperties, texture, slot );
+
 			return;
 
 		}

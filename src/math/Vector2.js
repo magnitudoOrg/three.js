@@ -415,6 +415,20 @@ THREE.Vector2.prototype = {
 
 		return this;
 
+	},
+
+	rotateAround: function ( center, angle ) {
+
+		var c = Math.cos( angle ), s = Math.sin( angle );
+
+		var x = this.x - center.x;
+		var y = this.y - center.y;
+
+		this.x = x * c - y * s + center.x;
+		this.y = x * s + y * c + center.y;
+
+		return this;
+
 	}
 
 };
